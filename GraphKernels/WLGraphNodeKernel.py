@@ -156,11 +156,16 @@ class WLGraphNodeKernel(): #GraphKernel
 
         #loop over the two dimensions of the list
         #print phi[1][0]
-        ve=phi
+        #ve=phi
 
         #df = DataFrame(phi[j][i],).T.fillna(0)
+        if not isinstance(self.hash, list):
+            #hash is the total number of features
+            ve=[[new_convert_to_sparse_matrix(phi[j][i],label_counter,self.hash) for i in range(n)] for j in range(self.h+1)]
+        else:
+            #h is a list of sized of length self.h+1
+            ve=[[new_convert_to_sparse_matrix(phi[j][i],label_counter,self.hash[j]) for i in range(n)] for j in range(self.h+1)]
 
-        ve=[[new_convert_to_sparse_matrix(phi[j][i],label_counter,self.hash) for i in range(n)] for j in range(self.h+1)]
 
         #ve=convert_to_sparse_matrix(phi)
         #if self.normalization:

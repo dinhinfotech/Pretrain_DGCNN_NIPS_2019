@@ -109,6 +109,8 @@ def convert_to_sparse_matrix_enc(feature_dict, MapEncToId=None):
 def new_convert_to_sparse_matrix(feature_dict,N,hash):
     #hash 100
     M=max(feature_dict.keys())+1
+    #print("M",M)
+    #print("hash",hash)
     Mat=dok_matrix((M, hash))
     #print(M, N)
     for i in feature_dict.keys():

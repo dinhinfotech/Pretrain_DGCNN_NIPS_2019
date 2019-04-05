@@ -15,6 +15,7 @@ import random
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold
 from sklearn.svm import LinearSVC
+from scipy.sparse import csr_matrix, vstack, hstack
 
 from sklearn.model_selection import train_test_split
 cache={}
@@ -61,14 +62,20 @@ def transform(data):
     if data not in cache:
         #data.z = torch.Tensor(computeWL([data]).todense())
         #print(data)
-        if args.knorm:
-            cache[data] = torch.Tensor(normalize(computeWL([data], h=args.h, hash=args.hash, separated_iterations=args.separated_iterations)).todense())
-        else:
-            cache[data]=torch.Tensor(computeWL([data], h=args.h, hash=args.hash, separated_iterations=args.separated_iterations).todense())
+            #print("number of iterations", computeWL([data], h=args.h, hash=args.hash, separated_iterations=True).shape)
+            phi_mat_indexed_by_h=computeWL([data], h=args.h, hash=args.hash, separated_iterations=args.separated_iterations)
+            if args.knorm:
+                phi_mat_indexed_by_h=[normalize(i) for i in phi_mat_indexed_by_h]
+            #print(phi_mat_indexed_by_h[2])
+            #the following hstack is to put all the features from different iterations together
+            M = (hstack([phi_mat_indexed_by_h[iter_id] for iter_id in range(0, args.h + 1)]))
 
-        data.z = cache[data]
+            cache[data] = torch.Tensor(M.todense())
+            #print("WL output shape", cache[data].shape)
+
+            data.z = cache[data]
     else:
-        data.z = cache[data]
+            data.z = cache[data]
     return data
 
 def get_hidden(device, model, train_loader):
@@ -173,7 +180,7 @@ def main(args):
 
     skf = StratifiedKFold(n_splits=10)
 
-    for run in range(1,11):
+    for run in range(1,2): #11
         accs = []
         accs_cnn = []
         accs_dgcnn = []
@@ -211,11 +218,11 @@ def main(args):
 
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             if args.model=="GCN":
-                model = GCNNet(input_dim=dataset.num_features, dim=args.node_hidden_dim, gdim=args.graph_hidden_dim, out_dim=dataset.num_classes, pretr_out_dim=args.hash).to(device)  # GINNet(dim=32) #
+                model = GCNNet(input_dim=dataset.num_features, dim=args.node_hidden_dim, gdim=args.graph_hidden_dim, out_dim=dataset.num_classes, pretr_out_dim=sum(args.hash)).to(device)  # GINNet(dim=32) #
             elif args.model=="GIN":
                 model = GINNet(input_dim=dataset.num_features, dim=args.node_hidden_dim, out_dim=dataset.num_classes, pretr_out_dim=args.hash).to(device)  # GINNet(dim=32) #
             else:
-                model = GCNNetSortPooling(input_dim=dataset.num_features, dim=args.node_hidden_dim, gdim=args.graph_hidden_dim,out_dim=dataset.num_classes, pretr_out_dim=args.hash,k=args.sortpooling_k,device=device).to(device)
+                model = GCNNetSortPooling(input_dim=dataset.num_features, dim=args.node_hidden_dim, gdim=args.graph_hidden_dim,out_dim=dataset.num_classes, pretr_out_dim=sum(args.hash),k=args.sortpooling_k,device=device).to(device)
 
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,weight_decay=args.weight_decay)
             best_val_loss=1000000000.0
@@ -302,16 +309,16 @@ if __name__ == '__main__':
     parser.add_argument("--model", type=str, default="GCNSortPooling", # -4
             help="Graph Conv Model")
     parser.add_argument("--dataset", type=str, default="NCI1", # -4
-            help="Name of the datasetto consider")
+            help="Name of the dataset to consider")
     parser.add_argument("--lr", type=float, default=1e-2, #-2
             help="learning rate")
     parser.add_argument("--patience", type=int, default=50, #-2
             help="patience")
     parser.add_argument("--epochs", type=int, default=201, #200,
             help="number of training epochs")
-    parser.add_argument("--k", type=int, default=4, #200,
+    parser.add_argument("--k", type=int, default=3, #200,
             help="Conv layer width")
-    parser.add_argument("--node_hidden_dim", type=int, default=32, #48
+    parser.add_argument("--node_hidden_dim", type=int, default=128, #48
             help="number of hidden gcn units")
     parser.add_argument("--graph_hidden_dim", type=int, default=128, #48
             help="number of hidden gcn units")
@@ -319,11 +326,11 @@ if __name__ == '__main__':
             help="number of hidden gcn layers")
     parser.add_argument("--weight-decay", type=float, default=5e-4, # -4
             help="Weight for L2 loss")
-    parser.add_argument("--alpha", type=float, default=0.01, # -4
+    parser.add_argument("--alpha", type=float, default=0.1, # -4
             help="Parameter balancing losses")
     parser.add_argument("--kfsplits", type=int, default=10, # -4
             help="Number of splits of kfold")
-    parser.add_argument("--hash", type=int, default=200, # -4
+    parser.add_argument("--hash", dest='hash', type=int, nargs='*', default=[20,50,100,500], # -4
             help="Hash size")
     parser.add_argument("--h", type=int, default=3,
             help="Kernel h parameter")
@@ -331,9 +338,11 @@ if __name__ == '__main__':
     parser.add_argument('--no-knorm', dest='knorm', action='store_false', help="Don't normalize kernel for pretraining (default)")
     parser.set_defaults(knorm=False)
     parser.add_argument('--separated-iterations', dest='separated_iterations', action='store_true', help="Separated hashs for WL features (hash should be multiple of graph_size+1)")
-    parser.set_defaults(separated_iterations=False)
+    parser.set_defaults(separated_iterations=True)
     parser.add_argument('-sortpooling_k', type=float, default=0.6, help='number of nodes kept after SortPooling')
 
     args = parser.parse_args()
     print(args)
+    #args.hash=[20,50,100,500]
+    #[0,0,0.1,0.1,0.4]
     main(args)

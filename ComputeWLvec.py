@@ -7,7 +7,7 @@ from numpy import stack
 from sklearn.preprocessing import normalize
 
 
-def computeWL(graph_list_dortmund, h=3, hash=100, separated_iterations=False):
+def computeWL(graph_list_dortmund, h=3, hash=100, separated_iterations=True):
     g_list=[]
     for i in graph_list_dortmund:
         #print(i.x)
@@ -26,6 +26,7 @@ def computeWL(graph_list_dortmund, h=3, hash=100, separated_iterations=False):
         g_list.append(g)
 
     if separated_iterations:
+        #print("separated iterations")
         features= vectorize_wl_separated(g_list, h, hash)
     else:
         features= vectorize_wl(g_list, h, hash)
@@ -60,8 +61,35 @@ def vectorize_wl(graphs=None, n_iter=None, hash=None):
 def vectorize_wl_separated(graphs=None, n_iter=None, hash=None):
     #features divided in the hash
     new_graphs = graphs #convert_graphs(graphs)
+    #print("hash",hash)
+    WLvect= WLVectorizer(r=n_iter, hash=hash) #//(n_iter+1)
+    iters_features = WLvect.transform(new_graphs)
+    #print(iters_features)
+    list_graph_vector = [[] for i in range(n_iter + 1)]
+    Mat=[]
+    for idx in range(len(graphs)):
+        #M = iters_features[0][idx]
+        #for iter_id in range(1, n_iter+1):
+            #M.stack(iters_features[iter_id][idx])
+        #horizontal stack of different WL features
+        for iter_id in range(0, n_iter + 1):
+            M=iters_features[iter_id][idx]#hstack([iters_features[iter_id][idx] for iter_id in range(0, n_iter+1)])
+            #print(M)
+            list_graph_vector[iter_id].append(csr_matrix(M.sum(axis=0)))
+    for iter_id in range(0, n_iter + 1):
+        Mat.append(vstack(list_graph_vector[iter_id]))
+    #print("Mat[0]",Mat[0].shape)
+    #print("Mat[1]",Mat[1].shape)
+    #print("Mat[2]",Mat[2].shape)
+    #print("Mat[3]",Mat[3].shape)
+    return Mat
 
-    WLvect= WLVectorizer(r=n_iter, hash=hash//(n_iter+1))
+
+def _vectorize_wl_separated(graphs=None, n_iter=None, hash=None):
+    #features divided in the hash
+    new_graphs = graphs #convert_graphs(graphs)
+    #print("hash",hash)
+    WLvect= WLVectorizer(r=n_iter, hash=hash) #//(n_iter+1)
     iters_features = WLvect.transform(new_graphs)
     #print(iters_features)
     list_graph_vector = []
@@ -69,6 +97,7 @@ def vectorize_wl_separated(graphs=None, n_iter=None, hash=None):
         #M = iters_features[0][idx]
         #for iter_id in range(1, n_iter+1):
             #M.stack(iters_features[iter_id][idx])
+        #horizontal stack of different WL features
         M=hstack([iters_features[iter_id][idx] for iter_id in range(0, n_iter+1)])
         #print(M)
         list_graph_vector.append(csr_matrix(M.sum(axis=0)))
